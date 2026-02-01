@@ -20,16 +20,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- GLOBAL CONSTANTS ---
+# Moved here so it's globally accessible to all endpoints
+expected_columns = [
+    "Month", "Hour", "Temperature", "Relative Humidity", "Pressure", 
+    "Wind Speed", "Solar Zenith Angle", "Clearsky GHI", "lat", "long", 
+    "Hour_sin", "Hour_cos", "Month_sin", "Month_cos"
+]
+
 # --- ASSET LOADING ---
+model = None
+pt_y = None
+
 try:
     model_obj = joblib.load('assets/solar_xgboost_model_v2.pkl')
+    # Use global keywords to update the variables defined above
     model = model_obj.get_booster() if hasattr(model_obj, "get_booster") else model_obj
     pt_y = joblib.load('assets/target_transformer_v2.pkl')
-    expected_columns = [
-        "Month", "Hour", "Temperature", "Relative Humidity", "Pressure", 
-        "Wind Speed", "Solar Zenith Angle", "Clearsky GHI", "lat", "long", 
-        "Hour_sin", "Hour_cos", "Month_sin", "Month_cos"
-    ]
+    
+    # Apply feature names to the booster
     model.feature_names = expected_columns
     print("✅ Assets loaded and synchronized.")
 except Exception as e:
@@ -39,9 +48,8 @@ except Exception as e:
 class PincodeRequest(BaseModel):
     pincode: str 
 
-# --- UPDATED GEOLOCATION HELPER ---
+# --- GEOLOCATION HELPER ---
 def get_coords_with_city(pincode: str):
-    # Local fallback for instant testing
     backups = {
         "812001": (25.24, 86.97, "Bhagalpur"),
         "821304": (24.91, 84.18, "Dehri"),
@@ -50,7 +58,6 @@ def get_coords_with_city(pincode: str):
     if pincode in backups: return backups[pincode]
     
     try:
-        # We add addressdetails=1 to get the 'city' or 'town' field from Nominatim
         url = f"https://nominatim.openstreetmap.org/search?postalcode={pincode}&country=India&format=json&addressdetails=1&limit=1"
         res = requests.get(url, headers={'User-Agent': 'SolarCast/2.0'}).json()
         if res:
@@ -63,6 +70,9 @@ def get_coords_with_city(pincode: str):
 # --- ENDPOINTS ---
 @app.post("/predict")
 async def predict_solar(req: PincodeRequest):
+    if model is None or pt_y is None:
+        raise HTTPException(status_code=500, detail="Model assets not loaded")
+        
     try:
         lat, lon, city = get_coords_with_city(req.pincode)
         if lat is None:
@@ -109,13 +119,36 @@ async def predict_solar(req: PincodeRequest):
 
 @app.get("/outlook")
 async def get_outlook(lat: float, lon: float):
-    location = pvlib.location.Location(lat, lon)
-    start_date = pd.Timestamp.now(tz='UTC').normalize()
-    results = []
-    for i in range(15):
-        day = start_date + pd.Timedelta(days=i)
-        # Scan 24 hours to find the peak noon value
-        day_hours = pd.date_range(start=day, periods=24, freq='h')
-        clearsky = location.get_clearsky(day_hours)
-        results.append({"day": str(day.date()), "max_potential": round(float(clearsky['ghi'].max()), 2)})
-    return results
+    try:
+        API_KEY = os.getenv("TOMORROW_API_KEY")
+        # Fetching 15-day daily forecast data
+        url = f"https://api.tomorrow.io/v4/weather/forecast?location={lat},{lon}&apikey={API_KEY}&timesteps=1d"
+        response = requests.get(url).json()
+        
+        days_data = response['timelines']['daily']
+        location = pvlib.location.Location(lat, lon)
+        results = []
+
+        for day in days_data[:15]:
+            ts = pd.Timestamp(day['time'], tz='UTC')
+            # Get the theoretical max for this specific day
+            solpos = location.get_solarposition(pd.DatetimeIndex([ts]))
+            clearsky = location.get_clearsky(pd.DatetimeIndex([ts]))
+            max_potential = float(clearsky['ghi'].iloc[0])
+            
+            # Use daily cloud cover to 'dampen' the potential
+            # If cloud cover is 100%, we reduce energy significantly
+            cloud_cover = day['values'].get('cloudCoverAvg', 0) / 100.0
+            weather_adjustment = 1.0 - (cloud_cover * 0.75) # Reduce by up to 75% on cloudy days
+            
+            adjusted_ghi = max_potential * weather_adjustment
+
+            results.append({
+                "day": str(ts.date()),
+                "max_potential": round(max(0, adjusted_ghi), 2)
+            })
+        return results
+    except Exception as e:
+        print(f"Outlook Error: {e}")
+        # Fallback to clear sky if API fails so the UI doesn't break
+        return [{"day": "Error", "max_potential": 0}]

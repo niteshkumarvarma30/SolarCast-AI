@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SolarCast AI | Official Dashboard</title>
+    <title>SolarCast AI | Live AWS Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -25,7 +25,7 @@
                         </svg>
                     </button>
                 </div>
-                <p class="text-slate-400 mt-2 font-medium tracking-tight">Real-Time Solar Flux Forecasting</p>
+                <p class="text-slate-400 mt-2 font-medium tracking-tight">Real-Time Solar Flux Forecasting • AWS Cloud</p>
             </div>
 
             <div class="flex bg-slate-800 p-2 rounded-2xl border border-slate-700 w-full md:w-auto shadow-2xl transition-all focus-within:border-orange-500">
@@ -44,7 +44,7 @@
                     <span class="block text-slate-400 font-bold mt-2 text-xl tracking-tight">Watts / m²</span>
                 </div>
                 
-                <div id="status-badge" class="mt-8 py-2 px-6 rounded-full bg-slate-900/50 text-slate-400 text-xs inline-block border border-slate-700">System Ready</div>
+                <div id="status-badge" class="mt-8 py-2 px-6 rounded-full bg-slate-900/50 text-slate-400 text-xs inline-block border border-slate-700 transition-all">System Ready</div>
                 
                 <div class="mt-10 pt-10 border-t border-slate-700/30 grid grid-cols-2 gap-4 text-left">
                     <div>
@@ -74,48 +74,35 @@
                     <h2 class="text-3xl font-black text-orange-400 italic uppercase">System Intelligence</h2>
                     <button onclick="toggleModal()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
                 </div>
-
                 <div class="space-y-6 text-slate-300">
                     <section>
                         <h4 class="text-white font-bold mb-2">1. The Core Model (XGBoost)</h4>
-                        <p class="text-sm">The forecast is powered by an <strong>XGBoost Regressor</strong>, using the native C++ DMatrix engine for maximum performance. It interprets real-time weather parameters to predict irradiance flux.</p>
+                        <p class="text-sm">Driven by an <strong>XGBoost Regressor</strong> on AWS EC2. It maps weather vectors (Humidity, Pressure, Wind) to Irradiance flux with sub-50ms latency.</p>
                     </section>
-
                     <section>
                         <h4 class="text-white font-bold mb-2">2. Solar Physics (PVLib)</h4>
-                        <p class="text-sm">The <strong>Ineichen Clearsky Model</strong> provides a theoretical baseline. By calculating the Solar Zenith Angle and Extraterrestrial Radiation, the system knows exactly where the sun is relative to your Pincode.</p>
+                        <p class="text-sm">The <strong>Ineichen Clearsky Model</strong> calculates the precise Solar Zenith Angle for the Pincode's coordinates to establish a physics-based baseline.</p>
                     </section>
-                    
-
                     <section>
-                        <h4 class="text-white font-bold mb-2">3. Temporal Encoding</h4>
-                        <p class="text-sm">Time is processed using <strong>Cyclical Encoding ($sin$/$cos$ transforms)</strong>. This allows the model to understand the 24-hour solar cycle as a continuous loop rather than a linear number.</p>
+                        <h4 class="text-white font-bold mb-2">3. Deployment Architecture</h4>
+                        <p class="text-sm">This project is live via a <strong>Decoupled Cloud Architecture</strong>: The UI is hosted on AWS S3, while the AI logic runs on an Ubuntu 24.04 EC2 instance managed by PM2.</p>
                     </section>
-
-                    <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700 text-[10px] font-mono">
-                        <p class="text-orange-500 mb-1 tracking-widest uppercase">// Physics Engine Metric</p>
-                        <p>Total GHI = Beam + Diffuse + Ground-Reflected</p>
-                        <p>Inference Latency: &lt; 50ms</p>
-                    </div>
                 </div>
-                
-                <button onclick="toggleModal()" class="w-full mt-8 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/50 py-3 rounded-xl font-bold transition">Close Intelligence Panel</button>
+                <button onclick="toggleModal()" class="w-full mt-8 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/50 py-3 rounded-xl font-bold transition">Close</button>
             </div>
         </div>
 
         <footer class="mt-16 text-center">
-            <p class="text-slate-700 text-[10px] uppercase tracking-[0.5em] font-bold">
-                XGBoost Native • PVLib • OpenStreetMap
-            </p>
+            <p class="text-slate-700 text-[10px] uppercase tracking-[0.5em] font-bold">XGBoost Native Booster • AWS Infrastructure</p>
         </footer>
     </div>
 
     <script>
         let myChart;
+        const AWS_IP = "16.16.131.10"; // Your Verified Public IP
 
         function toggleModal() {
-            const modal = document.getElementById('infoModal');
-            modal.classList.toggle('hidden');
+            document.getElementById('infoModal').classList.toggle('hidden');
         }
 
         async function fetchAllData() {
@@ -128,42 +115,41 @@
                 return;
             }
 
-            badge.innerText = "Analyzing Atmos Layers...";
-            badge.classList.remove('text-red-400', 'text-emerald-400');
-            badge.classList.add('animate-pulse', 'text-slate-400');
+            badge.innerText = "Connecting to AWS Cloud...";
+            badge.classList.add('animate-pulse');
 
             try {
-                // 1. Prediction Request
-                const predRes = await fetch('http://127.0.0.1:8080/predict', {
+                // 1. Prediction Request to AWS (Port 80)
+                const predRes = await fetch(`http://${AWS_IP}/predict`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ pincode: pin })
                 });
                 
                 const data = await predRes.json();
-                if (!predRes.ok) throw new Error(data.detail || "Request Failed");
+                if (!predRes.ok) throw new Error(data.detail || "API Offline");
 
-                // 2. Update Prediction UI
-                cityDiv.innerText = data.city || "Unknown Area";
+                // Update UI
+                cityDiv.innerText = data.city || "Area: " + pin;
                 document.getElementById('ghi-val').innerText = data.prediction;
                 document.getElementById('m-temp').innerText = `${data.metadata.temp}°C`;
                 document.getElementById('m-sky').innerText = data.metadata.condition;
-                document.getElementById('m-coords').innerText = `COORD_LINK: ${data.lat.toFixed(3)}, ${data.lon.toFixed(3)}`;
+                document.getElementById('m-coords').innerText = `SAT_FIX: ${data.lat.toFixed(3)}, ${data.lon.toFixed(3)}`;
 
-                // 3. Outlook Request
-                const outlookRes = await fetch(`http://127.0.0.1:8080/outlook?lat=${data.lat}&lon=${data.lon}`);
+                // 2. Outlook Request to AWS (Port 80)
+                const outlookRes = await fetch(`http://${AWS_IP}/outlook?lat=${data.lat}&lon=${data.lon}`);
                 const outlookData = await outlookRes.json();
                 renderChart(outlookData);
 
-                badge.innerText = "Location Synced";
-                badge.classList.remove('animate-pulse', 'text-slate-400');
-                badge.classList.add('text-emerald-400');
+                badge.innerText = "Network Handshake OK";
+                badge.classList.replace('text-slate-400', 'text-emerald-400');
+                badge.classList.remove('animate-pulse');
 
             } catch (err) {
-                console.error("Dashboard Error:", err);
-                badge.innerText = "Error: " + err.message;
-                badge.classList.remove('animate-pulse', 'text-slate-400');
-                badge.classList.add('text-red-400');
+                console.error(err);
+                badge.innerText = "Connection Failed";
+                badge.classList.replace('text-slate-400', 'text-red-400');
+                badge.classList.remove('animate-pulse');
                 cityDiv.innerText = "--";
             }
         }
@@ -171,21 +157,19 @@
         function renderChart(data) {
             const ctx = document.getElementById('forecastChart').getContext('2d');
             if (myChart) myChart.destroy();
-            
             myChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: data.map(d => d.day),
                     datasets: [{
-                        label: 'Peak GHI',
+                        label: 'Max GHI',
                         data: data.map(d => d.max_potential),
                         borderColor: '#f97316',
                         backgroundColor: 'rgba(249, 115, 22, 0.1)',
                         fill: true,
                         tension: 0.4,
-                        borderWidth: 4,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#f97316'
+                        borderWidth: 3,
+                        pointRadius: 3
                     }]
                 },
                 options: {
@@ -193,15 +177,8 @@
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        y: { 
-                            beginAtZero: true, 
-                            grid: { color: 'rgba(255,255,255,0.05)' }, 
-                            ticks: { color: '#64748b', font: { size: 10 } } 
-                        },
-                        x: { 
-                            grid: { display: false }, 
-                            ticks: { color: '#64748b', font: { size: 10 } } 
-                        }
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+                        x: { grid: { display: false }, ticks: { color: '#64748b' } }
                     }
                 }
             });
