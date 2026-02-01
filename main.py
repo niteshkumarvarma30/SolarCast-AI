@@ -8,12 +8,14 @@ import xgboost as xgb
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv() 
 app = FastAPI(title="SolarCast Enterprise API")
 
+# --- GLOBAL ACCESS CONFIG ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -32,7 +34,7 @@ try:
     model.feature_names = expected_columns
     print("✅ Assets Synchronized.")
 except Exception as e:
-    print(f"❌ Initialization Error: {e}")
+    print(f"❌ Asset Error: {e}")
 
 class ForecastRequest(BaseModel):
     pincode: str = Field(..., description="Target Location PIN")
@@ -55,17 +57,13 @@ async def get_live_inference(req: ForecastRequest):
     try:
         lat, lon, city = get_location_data(req.pincode)
         if lat is None: raise HTTPException(status_code=400, detail="Invalid PIN")
-
         API_KEY = os.getenv("TOMORROW_API_KEY")
         weather_url = f"https://api.tomorrow.io/v4/weather/realtime?location={lat},{lon}&apikey={API_KEY}"
         w_res = requests.get(weather_url, timeout=5).json()
         
         condition = "Live AI Mode Active"
-        if 'data' not in w_res:
-            vals = {'temperature': 27, 'humidity': 45, 'pressureSurfaceLevel': 1012, 'windSpeed': 4}
-            condition = "API LIMIT: PHYSICS FALLBACK ACTIVE"
-        else:
-            vals = w_res['data']['values']
+        vals = w_res.get('data', {}).get('values', {'temperature': 27, 'humidity': 45, 'pressureSurfaceLevel': 1012, 'windSpeed': 4})
+        if 'data' not in w_res: condition = "API LIMIT: PHYSICS FALLBACK ACTIVE"
         
         ts = pd.Timestamp.now(tz='UTC')
         loc = pvlib.location.Location(lat, lon)
@@ -122,11 +120,29 @@ async def get_enterprise_outlook(lat: float, lon: float, cost: float):
         mock_flux = max(0, 800 * np.sin(np.pi * (i - 6) / 12)) if 6 <= i <= 18 else 0
         hourly_results.append({"hour": hour_ts.strftime("%H:00"), "flux": round(mock_flux, 2)})
 
+    # System Cost Estimations
+    cost_data = {
+        1.0: {"pre": 45000, "subsidy": 30000},
+        3.0: {"pre": 140000, "subsidy": 78000},
+        5.0: {"pre": 220000, "subsidy": 78000}
+    }
+
     return {
         "outlook": daily_results,
         "hourly_forecast": hourly_results,
         "comparison": [
-            {"size": f"{cap}kW", "units": round(totals[cap], 1), "savings": round(totals[cap]*cost, 0)}
+            {
+                "size": f"{cap}kW", 
+                "units": round(totals[cap], 1), 
+                "savings": round(totals[cap]*cost, 0),
+                "market_price": cost_data[cap]["pre"],
+                "pms_subsidy": cost_data[cap]["subsidy"],
+                "net_investment": cost_data[cap]["pre"] - cost_data[cap]["subsidy"]
+            }
             for cap in capacities
         ]
     }
+
+# --- ROOT UI MOUNT ---
+# Serves index.html at root (http://IP/)
+app.mount("/", StaticFiles(directory=".", html=True), name="static")
