@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv() 
-app = FastAPI(title="SolarCast AI - Generation Forecast")
+app = FastAPI(title="SolarCast Enterprise API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- ASSET LOADING ---
+# --- AI ASSET SYNC ---
 expected_columns = ["Month", "Hour", "Temperature", "Relative Humidity", "Pressure", "Wind Speed", "Solar Zenith Angle", "Clearsky GHI", "lat", "long", "Hour_sin", "Hour_cos", "Month_sin", "Month_cos"]
 model, pt_y = None, None
 
@@ -30,22 +30,20 @@ try:
     model = model_obj.get_booster() if hasattr(model_obj, "get_booster") else model_obj
     pt_y = joblib.load('assets/target_transformer_v2.pkl')
     model.feature_names = expected_columns
-    print("✅ Assets Synchronized.")
+    print("✅ Enterprise Assets Loaded.")
 except Exception as e:
-    print(f"❌ Asset Error: {e}")
+    print(f"❌ Initialization Error: {e}")
 
-# DATA MODEL: Focused only on PIN and Cost
-class SolarForecastRequest(BaseModel):
-    pincode: str = Field(..., description="Location PIN")
-    unit_cost: float = Field(..., description="Cost per Unit (₹)")
+class ForecastRequest(BaseModel):
+    pincode: str = Field(..., description="Target Location ZIP")
+    unit_cost: float = Field(..., description="Current Utility Rate")
 
-def get_coords_with_city(pincode: str):
-    # Hardcoded backup for your specific test PIN
+def get_location_data(pincode: str):
     backups = {"821304": (24.91, 84.18, "Dehri"), "110001": (28.61, 77.23, "New Delhi")}
     if pincode in backups: return backups[pincode]
     try:
         url = f"https://nominatim.openstreetmap.org/search?postalcode={pincode}&country=India&format=json&limit=1"
-        res = requests.get(url, headers={'User-Agent': 'SolarCast/2.0'}).json()
+        res = requests.get(url, headers={'User-Agent': 'SolarCast/3.0'}).json()
         if res:
             city = res[0].get('display_name', '').split(',')[0]
             return float(res[0]['lat']), float(res[0]['lon']), city
@@ -53,19 +51,19 @@ def get_coords_with_city(pincode: str):
     return None, None, None
 
 @app.post("/predict")
-async def predict_solar(req: SolarForecastRequest):
+async def get_live_inference(req: ForecastRequest):
     try:
-        lat, lon, city = get_coords_with_city(req.pincode)
-        if lat is None: raise HTTPException(status_code=400, detail="Invalid Pincode")
+        lat, lon, city = get_location_data(req.pincode)
+        if lat is None: raise HTTPException(status_code=400, detail="Invalid Geo-Location")
 
         API_KEY = os.getenv("TOMORROW_API_KEY")
         weather_url = f"https://api.tomorrow.io/v4/weather/realtime?location={lat},{lon}&apikey={API_KEY}"
         w_res = requests.get(weather_url, timeout=5).json()
         
-        condition = "Analysis Successful"
+        condition = "Live AI Mode Active"
         if 'data' not in w_res:
-            vals = {'temperature': 25, 'humidity': 50, 'pressureSurfaceLevel': 1013, 'windSpeed': 5}
-            condition = "API LIMIT REACHED (Using Physics Fallback)"
+            vals = {'temperature': 27, 'humidity': 45, 'pressureSurfaceLevel': 1012, 'windSpeed': 4}
+            condition = "API LIMIT: PHYSICS FALLBACK ACTIVE"
         else:
             vals = w_res['data']['values']
         
@@ -85,28 +83,27 @@ async def predict_solar(req: SolarForecastRequest):
         
         dmatrix = xgb.DMatrix(input_df[expected_columns], feature_names=expected_columns)
         pred_raw = pt_y.inverse_transform(model.predict(dmatrix).reshape(-1, 1))[0][0]
-        prediction = max(0, round(float(pred_raw), 2))
+        prediction = max(0, float(pred_raw))
 
         return {
-            "prediction": prediction, "city": city, "lat": lat, "lon": lon,
-            "savings_hourly": round((prediction / 1000) * req.unit_cost, 2),
-            "metadata": {"temp": vals.get('temperature'), "condition": condition}
+            "prediction": round(prediction, 2), "city": city, "lat": lat, "lon": lon,
+            "revenue_hourly": round((prediction / 1000) * req.unit_cost, 2),
+            "status": condition
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/outlook")
-async def get_outlook(lat: float, lon: float, cost: float):
+async def get_enterprise_outlook(lat: float, lon: float, cost: float):
     location = pvlib.location.Location(lat, lon)
     start_date = pd.Timestamp.now(tz='UTC').normalize()
-    results = []
+    daily_results = []
     
-    total_kwh = 0
-    total_money = 0
+    capacities = [1.0, 3.0, 5.0]
+    totals = {cap: 0 for cap in capacities}
 
     for i in range(15):
         day = start_date + pd.Timedelta(days=i)
-        # Average daylight samples (9 AM, 12 PM, 3 PM)
         samples = [9, 12, 15]
         flux_values = []
         for hr in samples:
@@ -115,16 +112,16 @@ async def get_outlook(lat: float, lon: float, cost: float):
             flux_values.append(clearsky['ghi'].iloc[0])
         
         avg_flux = np.mean(flux_values)
-        # Energy = (Flux/1000) * 1kW * 5 peak hours
-        daily_units = (avg_flux / 1000) * 1 * 5 
-        daily_money = daily_units * cost
-        
-        total_kwh += daily_units
-        total_money += daily_money
-        results.append({"day": str(day.date()), "money": round(daily_money, 2)})
+        for cap in capacities:
+            # ROI Math: (Flux/1000) * kW * 5 peak hours
+            totals[cap] += (avg_flux / 1000) * cap * 5
+            
+        daily_results.append({"day": str(day.date()), "money": round((avg_flux/1000)*1*5*cost, 2)})
 
     return {
-        "outlook": results,
-        "total_energy_kwh": round(total_kwh, 2),
-        "total_money_generated": round(total_money, 2)
+        "outlook": daily_results,
+        "comparison": [
+            {"size": f"{cap}kW", "units": round(totals[cap], 1), "savings": round(totals[cap]*cost, 0)}
+            for cap in capacities
+        ]
     }
