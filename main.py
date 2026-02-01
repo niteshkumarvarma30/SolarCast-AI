@@ -30,7 +30,7 @@ expected_columns = [
 model, pt_y = None, None
 
 try:
-    # Loading assets from the synchronized assets folder
+    # Assets must be in the /assets folder on your EC2 instance
     model_obj = joblib.load('assets/solar_xgboost_model_v2.pkl')
     model = model_obj.get_booster() if hasattr(model_obj, "get_booster") else model_obj
     pt_y = joblib.load('assets/target_transformer_v2.pkl')
@@ -42,12 +42,12 @@ except Exception as e:
 # --- UPDATED DATA MODEL ---
 class SolarFinancialRequest(BaseModel):
     pincode: str
-    avg_daily_usage: float  # Expected daily units (kWh)
-    unit_cost: float        # Cost per unit in Rupees (₹)
+    avg_daily_usage: float  # User's daily unit consumption (kWh)
+    unit_cost: float        # Current grid tariff (₹/unit)
 
 # --- GEOLOCATION HELPER ---
 def get_coords_with_city(pincode: str):
-    # Performance backups for common project locations
+    # Optimized backups for local project regions
     backups = {
         "812001": (25.24, 86.97, "Bhagalpur"), 
         "813210": (25.303, 86.967, "Bhagalpur District"),
@@ -72,23 +72,20 @@ async def predict_solar(req: SolarFinancialRequest):
         lat, lon, city = get_coords_with_city(req.pincode)
         if lat is None: raise HTTPException(status_code=400, detail="Invalid Pincode")
 
-        # Weather Fetching with Defensive Error Handling
+        # Weather Fetching with Defensive Fallback
         API_KEY = os.getenv("TOMORROW_API_KEY")
         weather_url = f"https://api.tomorrow.io/v4/weather/realtime?location={lat},{lon}&apikey={API_KEY}"
         response = requests.get(weather_url, timeout=5)
         w_res = response.json()
         
-        # Check if Tomorrow.io API is rate limited (25 req/hour)
         if 'data' not in w_res:
-            print(f"⚠️ API Rate Limited: {w_res.get('message', 'Unknown Error')}")
-            # Physics defaults for temperature/humidity during limited window
             vals = {'temperature': 25, 'humidity': 50, 'pressureSurfaceLevel': 1013, 'windSpeed': 5}
             condition = "API Rate Limited (Using Defaults)"
         else:
             vals = w_res['data']['values']
             condition = "Analysis Successful"
         
-        # Physics Engine (PVLib)
+        # Physics Engine (PVLib) for precise Sun position
         ts = pd.Timestamp.now(tz='UTC')
         loc = pvlib.location.Location(lat, lon)
         solpos = loc.get_solarposition(pd.DatetimeIndex([ts]))
@@ -103,14 +100,13 @@ async def predict_solar(req: SolarFinancialRequest):
             "Month_sin": np.sin(2*np.pi*ts.month/12), "Month_cos": np.cos(2*np.pi*ts.month/12),
         }
 
-        # XGBoost Inference
+        # XGBoost ML Inference
         dmatrix = xgb.DMatrix(pd.DataFrame([input_data])[expected_columns], feature_names=expected_columns)
         pred_scaled = model.predict(dmatrix)
         pred_raw = pt_y.inverse_transform(pred_scaled.reshape(-1, 1))[0][0]
         prediction = max(0, round(float(pred_raw), 2))
 
-        # Financial Logic: Hourly Savings = (kW Generated) * (Cost per Unit)
-        # Based on 2026 Indian grid tariffs (~₹7-10/unit)
+        # Financial Logic: Hourly Savings = (kW Generated) * (User's Grid Tariff)
         hourly_savings = (prediction / 1000) * req.unit_cost
 
         return {
@@ -119,7 +115,7 @@ async def predict_solar(req: SolarFinancialRequest):
             "metadata": {"temp": vals.get('temperature'), "condition": condition}
         }
     except Exception as e:
-        print(f"❌ Server Error during /predict: {e}")
+        print(f"❌ Server Error: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 # --- 15-DAY OUTLOOK ENDPOINT ---
@@ -128,23 +124,21 @@ async def get_outlook(lat: float, lon: float):
     try:
         API_KEY = os.getenv("TOMORROW_API_KEY")
         url = f"https://api.tomorrow.io/v4/weather/forecast?location={lat},{lon}&apikey={API_KEY}&timesteps=1d"
-        response = requests.get(url, timeout=10)
-        data = response.json()
+        data = requests.get(url, timeout=10).json()
         days_data = data.get('timelines', {}).get('daily', [])
         
         location = pvlib.location.Location(lat, lon)
         results = []
 
-        if not days_data: raise ValueError("No daily data available from API")
+        if not days_data: raise ValueError("No daily data")
 
         for day in days_data[:15]:
             date_str = day.get('time').split('T')[0] 
-            # 4-hour Solar Noon window (10:00 to 14:00) to ensure accurate peak capture
+            # 4-hour window (10:00 to 14:00) to ensure accurate Solar Noon capture
             times = pd.date_range(start=f"{date_str} 10:00:00", end=f"{date_str} 14:00:00", freq='h', tz='UTC')
             clearsky = location.get_clearsky(times)
             max_potential = float(clearsky['ghi'].max())
             
-            # Adjust theoretical max based on predicted cloud cover
             cloud_cover = day.get('values', {}).get('cloudCoverAvg', 0) / 100.0
             weather_adjustment = 1.0 - (cloud_cover * 0.6) 
             
@@ -153,20 +147,10 @@ async def get_outlook(lat: float, lon: float):
                 "max_potential": round(max(50, max_potential * weather_adjustment), 2)
             })
         return results
-
     except Exception as e:
-        print(f"❌ Outlook Error (Triggering Robust Physics Fallback): {e}")
-        # Return pure physics Clearsky baseline if API fails
+        # Fallback to pure physics if API limit is reached
         location = pvlib.location.Location(lat, lon)
         start_date = pd.Timestamp.now(tz='UTC').normalize()
-        fallback_results = []
-        for i in range(15):
-            day = start_date + pd.Timedelta(days=i)
-            # Targeting 12:00 PM for each day in the fallback
-            noon_ts = day + pd.Timedelta(hours=12)
-            clearsky = location.get_clearsky(pd.DatetimeIndex([noon_ts]))
-            fallback_results.append({
-                "day": str(day.date()), 
-                "max_potential": round(float(clearsky['ghi'].iloc[0]), 2)
-            })
-        return fallback_results
+        return [{"day": str((start_date + pd.Timedelta(days=i)).date()), 
+                 "max_potential": round(float(location.get_clearsky(pd.date_range((start_date + pd.Timedelta(days=i)) + pd.Timedelta(hours=12), periods=1, freq='h'))['ghi'].iloc[0]), 2)} 
+                for i in range(15)]
