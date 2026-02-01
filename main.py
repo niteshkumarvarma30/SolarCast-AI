@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv() 
-app = FastAPI(title="SolarCast AI - Generation Forecast Edition")
+app = FastAPI(title="SolarCast AI - Generation Forecast")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,12 +34,14 @@ try:
 except Exception as e:
     print(f"❌ Asset Error: {e}")
 
+# DATA MODEL: Focused only on PIN and Cost
 class SolarForecastRequest(BaseModel):
     pincode: str = Field(..., description="Location PIN")
-    unit_cost: float = Field(..., description="Local cost per unit")
+    unit_cost: float = Field(..., description="Cost per Unit (₹)")
 
 def get_coords_with_city(pincode: str):
-    backups = {"812001": (25.24, 86.97, "Bhagalpur"), "110001": (28.61, 77.23, "New Delhi")}
+    # Hardcoded backup for your specific test PIN
+    backups = {"821304": (24.91, 84.18, "Dehri"), "110001": (28.61, 77.23, "New Delhi")}
     if pincode in backups: return backups[pincode]
     try:
         url = f"https://nominatim.openstreetmap.org/search?postalcode={pincode}&country=India&format=json&limit=1"
@@ -104,6 +106,7 @@ async def get_outlook(lat: float, lon: float, cost: float):
 
     for i in range(15):
         day = start_date + pd.Timedelta(days=i)
+        # Average daylight samples (9 AM, 12 PM, 3 PM)
         samples = [9, 12, 15]
         flux_values = []
         for hr in samples:
@@ -112,13 +115,12 @@ async def get_outlook(lat: float, lon: float, cost: float):
             flux_values.append(clearsky['ghi'].iloc[0])
         
         avg_flux = np.mean(flux_values)
-        # 15-day Energy calculation logic
-        daily_units = (avg_flux / 1000) * 1 * 5 # (W/m2 / 1000) * 1kW * 5 hrs
+        # Energy = (Flux/1000) * 1kW * 5 peak hours
+        daily_units = (avg_flux / 1000) * 1 * 5 
         daily_money = daily_units * cost
         
         total_kwh += daily_units
         total_money += daily_money
-        
         results.append({"day": str(day.date()), "money": round(daily_money, 2)})
 
     return {
