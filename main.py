@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv() 
-app = FastAPI(title="SolarCast AI - 2026 Profit Edition")
+app = FastAPI(title="SolarCast AI - 2026 Manual ROI Edition")
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,11 +36,11 @@ except Exception as e:
 
 class SolarFinancialRequest(BaseModel):
     pincode: str
-    avg_daily_usage: float # Fixed at 10 units/day for comparison
-    unit_cost: float       # Fixed at ₹6/unit for comparison
+    avg_daily_usage: float 
+    unit_cost: float       
 
 def get_coords_with_city(pincode: str):
-    backups = {"812001": (25.24, 86.97, "Bhagalpur"), "821304": (24.91, 84.18, "Dehri"), "110001": (28.61, 77.23, "New Delhi")}
+    backups = {"812001": (25.24, 86.97, "Bhagalpur"), "110001": (28.61, 77.23, "New Delhi")}
     if pincode in backups: return backups[pincode]
     try:
         url = f"https://nominatim.openstreetmap.org/search?postalcode={pincode}&country=India&format=json&limit=1"
@@ -95,19 +95,18 @@ async def predict_solar(req: SolarFinancialRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/outlook")
-async def get_outlook(lat: float, lon: float, kw: float = 1.0):
+async def get_outlook(lat: float, lon: float, usage: float, cost: float, kw: float = 1.0):
     location = pvlib.location.Location(lat, lon)
     start_date = pd.Timestamp.now(tz='UTC').normalize()
     results = []
     
-    # Grid Baseline: 15 days * 10 units * ₹6 = ₹900
-    grid_baseline = 900 
+    # Custom Grid Baseline
+    grid_baseline = 15 * usage * cost 
     total_solar_revenue = 0
 
     for i in range(15):
         day = start_date + pd.Timedelta(days=i)
-        # Average Daylight Samples (9 AM, 12 PM, 3 PM)
-        samples = [9, 12, 15]
+        samples = [9, 12, 15] # 3-point daylight average
         flux_values = []
         for hr in samples:
             ts = day + pd.Timedelta(hours=hr)
@@ -115,16 +114,15 @@ async def get_outlook(lat: float, lon: float, kw: float = 1.0):
             flux_values.append(clearsky['ghi'].iloc[0])
         
         avg_flux = np.mean(flux_values)
-        # Daily Solar Units = (Avg Flux / 1000) * 1kW * 5 peak hours
-        daily_units = (avg_flux / 1000) * kw * 5
-        daily_savings = daily_units * 6 # Fixed ₹6 rate
+        daily_units = (avg_flux / 1000) * kw * 5 # Assuming 5 peak hours efficiency
+        daily_savings = daily_units * cost
         total_solar_revenue += daily_savings
         
-        results.append({"day": str(day.date()), "avg_flux": round(avg_flux, 2), "daily_profit": round(daily_savings, 2)})
+        results.append({"day": str(day.date()), "daily_profit": round(daily_savings, 2)})
 
     return {
         "outlook": results,
-        "grid_baseline": grid_baseline,
+        "grid_baseline": round(grid_baseline, 2),
         "solar_total": round(total_solar_revenue, 2),
         "net_profit": round(total_solar_revenue - grid_baseline, 2)
     }
