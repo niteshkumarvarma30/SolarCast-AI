@@ -5,14 +5,14 @@ import numpy as np
 import pvlib
 import requests
 import xgboost as xgb
-from datetime import datetime, timedelta
+from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv() 
-app = FastAPI(title="SolarCast AI - 2026 Manual ROI Edition")
+app = FastAPI(title="SolarCast AI - Manual ROI Edition")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,10 +34,11 @@ try:
 except Exception as e:
     print(f"❌ Asset Error: {e}")
 
+# STRICT DATA MODEL: No Default Values
 class SolarFinancialRequest(BaseModel):
-    pincode: str
-    avg_daily_usage: float 
-    unit_cost: float       
+    pincode: str = Field(..., description="User's PIN")
+    avg_daily_usage: float = Field(..., description="Manual 15d avg unit input")
+    unit_cost: float = Field(..., description="Manual unit cost input")
 
 def get_coords_with_city(pincode: str):
     backups = {"812001": (25.24, 86.97, "Bhagalpur"), "110001": (28.61, 77.23, "New Delhi")}
@@ -61,6 +62,7 @@ async def predict_solar(req: SolarFinancialRequest):
         weather_url = f"https://api.tomorrow.io/v4/weather/realtime?location={lat},{lon}&apikey={API_KEY}"
         w_res = requests.get(weather_url, timeout=5).json()
         
+        # STRICT API LIMIT DETECTION
         condition = "Analysis Successful"
         if 'data' not in w_res:
             vals = {'temperature': 25, 'humidity': 50, 'pressureSurfaceLevel': 1013, 'windSpeed': 5}
@@ -95,13 +97,13 @@ async def predict_solar(req: SolarFinancialRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/outlook")
-async def get_outlook(lat: float, lon: float, usage: float, cost: float, kw: float = 1.0):
+async def get_outlook(lat: float, lon: float, usage: float, cost: float):
+    # This endpoint strictly requires usage and cost from the frontend
     location = pvlib.location.Location(lat, lon)
     start_date = pd.Timestamp.now(tz='UTC').normalize()
     results = []
     
-    # Custom Grid Baseline
-    grid_baseline = 15 * usage * cost 
+    grid_baseline_15d = 15 * usage * cost 
     total_solar_revenue = 0
 
     for i in range(15):
@@ -114,7 +116,7 @@ async def get_outlook(lat: float, lon: float, usage: float, cost: float, kw: flo
             flux_values.append(clearsky['ghi'].iloc[0])
         
         avg_flux = np.mean(flux_values)
-        daily_units = (avg_flux / 1000) * kw * 5 # Assuming 5 peak hours efficiency
+        daily_units = (avg_flux / 1000) * 1 * 5 # Assuming 1kW panel for 5 peak hours
         daily_savings = daily_units * cost
         total_solar_revenue += daily_savings
         
@@ -122,7 +124,7 @@ async def get_outlook(lat: float, lon: float, usage: float, cost: float, kw: flo
 
     return {
         "outlook": results,
-        "grid_baseline": round(grid_baseline, 2),
+        "grid_baseline": round(grid_baseline_15d, 2),
         "solar_total": round(total_solar_revenue, 2),
-        "net_profit": round(total_solar_revenue - grid_baseline, 2)
+        "net_profit": round(total_solar_revenue - grid_baseline_15d, 2)
     }
