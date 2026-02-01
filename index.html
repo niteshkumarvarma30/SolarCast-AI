@@ -3,183 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SolarCast AI | Live AWS Dashboard</title>
+    <title>SolarCast AI | 2026 Savings Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .modal-bg { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(8px); }
-        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .glass-card { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .orange-glow { box-shadow: 0 0 40px rgba(249, 115, 22, 0.15); }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans p-4 md:p-8">
+<body class="bg-[#080b14] text-slate-100 min-h-screen p-6 md:p-12 font-sans">
 
-    <div class="max-w-5xl mx-auto">
-        <header class="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
-            <div class="text-center md:text-left">
-                <div class="flex items-center gap-3 justify-center md:justify-start">
-                    <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-yellow-300 italic">SolarCast AI</h1>
-                    <button onclick="toggleModal()" class="text-slate-500 hover:text-orange-400 transition-colors focus:outline-none">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </button>
-                </div>
-                <p class="text-slate-400 mt-2 font-medium tracking-tight">Real-Time Solar Flux Forecasting • AWS Cloud</p>
+    <div class="max-w-6xl mx-auto">
+        <header class="flex flex-col xl:flex-row justify-between items-center mb-12 gap-8">
+            <div class="text-center xl:text-left">
+                <h1 class="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-yellow-400 italic tracking-tighter">SolarCast AI</h1>
+                <p class="text-slate-500 font-bold uppercase text-[10px] tracking-[0.5em] mt-2">XGBoost Engine • PM Surya Ghar Integrated</p>
             </div>
 
-            <div class="flex bg-slate-800 p-2 rounded-2xl border border-slate-700 w-full md:w-auto shadow-2xl transition-all focus-within:border-orange-500">
-                <input id="pincodeInput" type="number" placeholder="Enter PIN" class="bg-transparent px-6 py-3 outline-none w-full md:w-48 text-xl font-bold tracking-[0.2em] text-orange-400 placeholder:text-slate-600 placeholder:tracking-normal placeholder:text-sm">
-                <button onclick="fetchAllData()" class="bg-orange-500 hover:bg-orange-600 px-8 py-3 rounded-xl font-bold transition shadow-lg active:scale-95">Analyze</button>
+            <div class="flex flex-col md:flex-row bg-slate-900 border border-white/5 p-2 rounded-3xl shadow-2xl transition-all focus-within:border-orange-500/50">
+                <input id="pin" type="number" placeholder="PIN" class="bg-transparent px-6 py-4 outline-none w-full md:w-28 font-bold text-orange-500 border-b md:border-b-0 md:border-r border-white/10">
+                <input id="usage" type="number" placeholder="Daily Units" class="bg-transparent px-6 py-4 outline-none w-full md:w-32 font-bold text-white border-b md:border-b-0 md:border-r border-white/10">
+                <input id="cost" type="number" placeholder="₹/Unit" class="bg-transparent px-6 py-4 outline-none w-full md:w-28 font-bold text-white">
+                <button onclick="fetchAll()" class="bg-orange-500 hover:bg-orange-600 px-10 py-4 rounded-2xl font-black tracking-widest transition-all active:scale-95 shadow-lg">ANALYZE</button>
             </div>
         </header>
 
+        <div class="mb-12 glass-card p-8 rounded-[3rem] border-l-[12px] border-orange-500 flex flex-col md:flex-row justify-between items-center gap-8 orange-glow">
+            <div class="flex items-center gap-8 text-center md:text-left">
+                <div class="bg-orange-500/10 p-5 rounded-full text-orange-500 hidden md:block">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                </div>
+                <div>
+                    <h2 class="text-3xl font-black text-white italic tracking-tight">PM SURYA GHAR: MUFT BIJLI YOJANA</h2>
+                    <p class="text-slate-400 font-medium">Claim up to ₹78,000 Subsidy for Rooftop Solar in 2026.</p>
+                </div>
+            </div>
+            <a href="https://pmsuryaghar.gov.in/#/" target="_blank" class="bg-white text-slate-900 px-12 py-5 rounded-[2rem] font-black hover:scale-105 transition-transform shadow-2xl text-sm tracking-widest">APPLY NOW</a>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div class="lg:col-span-1 glass-card p-10 rounded-[2.5rem] text-center shadow-2xl relative overflow-hidden">
-                <div id="city-display" class="text-orange-400 text-2xl font-black uppercase tracking-tighter mb-2 italic min-h-[2rem]">--</div>
-                <h3 class="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-6">Current Forecast</h3>
-                
-                <div class="py-4">
-                    <span id="ghi-val" class="text-8xl font-black text-white">0</span>
-                    <span class="block text-slate-400 font-bold mt-2 text-xl tracking-tight">Watts / m²</span>
+            <div class="lg:col-span-1 glass-card p-12 rounded-[4rem] text-center border-t-4 border-orange-500/20">
+                <p id="city-text" class="text-orange-400 text-3xl font-black italic uppercase tracking-tighter mb-2">--</p>
+                <div class="py-10">
+                    <span id="ghi-text" class="text-9xl font-black text-white tracking-tighter">0</span>
+                    <p class="text-slate-500 font-bold uppercase text-[10px] tracking-[0.5em] mt-6">Watts / m² Flux</p>
                 </div>
-                
-                <div id="status-badge" class="mt-8 py-2 px-6 rounded-full bg-slate-900/50 text-slate-400 text-xs inline-block border border-slate-700 transition-all">System Ready</div>
-                
-                <div class="mt-10 pt-10 border-t border-slate-700/30 grid grid-cols-2 gap-4 text-left">
-                    <div>
-                        <p class="text-slate-500 text-[10px] uppercase font-bold mb-1 tracking-tighter">Temperature</p>
-                        <p id="m-temp" class="text-white text-lg font-bold">--</p>
-                    </div>
-                    <div>
-                        <p class="text-slate-500 text-[10px] uppercase font-bold mb-1 tracking-tighter">Status</p>
-                        <p id="m-sky" class="text-white text-lg font-bold">--</p>
-                    </div>
+                <div class="bg-[#121826] p-8 rounded-[2.5rem] border border-white/5">
+                    <p class="text-slate-500 text-[10px] uppercase font-bold mb-2 tracking-widest">Live Savings Potential</p>
+                    <p class="text-orange-500 text-5xl font-black tracking-tighter">₹<span id="save-text">0.00</span><span class="text-sm">/hr</span></p>
                 </div>
             </div>
 
-            <div class="lg:col-span-2 glass-card p-10 rounded-[2.5rem] shadow-2xl">
-                <div class="flex justify-between items-center mb-8">
-                    <h3 class="text-slate-500 text-xs font-bold uppercase tracking-widest">15-Day Peak Potential</h3>
-                    <span id="m-coords" class="text-[10px] text-slate-600 font-mono tracking-tighter"></span>
+            <div class="lg:col-span-2 glass-card p-12 rounded-[4rem]">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
+                    <p class="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">15-Day Peak Forecasting</p>
+                    <div id="total-15" class="bg-emerald-500/10 text-emerald-400 px-6 py-2 rounded-full font-black italic border border-emerald-500/20"></div>
                 </div>
-                <div class="h-64"><canvas id="forecastChart"></canvas></div>
+                <div class="h-[22rem]"><canvas id="mainChart"></canvas></div>
             </div>
         </div>
-
-        <div id="infoModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
-            <div class="modal-bg absolute inset-0" onclick="toggleModal()"></div>
-            <div class="relative glass-card max-w-2xl w-full p-8 rounded-[2rem] shadow-2xl border border-orange-500/30 overflow-y-auto max-h-[90vh]">
-                <div class="flex justify-between items-start mb-6">
-                    <h2 class="text-3xl font-black text-orange-400 italic uppercase">System Intelligence</h2>
-                    <button onclick="toggleModal()" class="text-slate-500 hover:text-white text-2xl">&times;</button>
-                </div>
-                <div class="space-y-6 text-slate-300">
-                    <section>
-                        <h4 class="text-white font-bold mb-2">1. The Core Model (XGBoost)</h4>
-                        <p class="text-sm">Driven by an <strong>XGBoost Regressor</strong> on AWS EC2. It maps weather vectors (Humidity, Pressure, Wind) to Irradiance flux with sub-50ms latency.</p>
-                    </section>
-                    <section>
-                        <h4 class="text-white font-bold mb-2">2. Solar Physics (PVLib)</h4>
-                        <p class="text-sm">The <strong>Ineichen Clearsky Model</strong> calculates the precise Solar Zenith Angle for the Pincode's coordinates to establish a physics-based baseline.</p>
-                    </section>
-                    <section>
-                        <h4 class="text-white font-bold mb-2">3. Deployment Architecture</h4>
-                        <p class="text-sm">This project is live via a <strong>Decoupled Cloud Architecture</strong>: The UI is hosted on AWS S3, while the AI logic runs on an Ubuntu 24.04 EC2 instance managed by PM2.</p>
-                    </section>
-                </div>
-                <button onclick="toggleModal()" class="w-full mt-8 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/50 py-3 rounded-xl font-bold transition">Close</button>
-            </div>
-        </div>
-
-        <footer class="mt-16 text-center">
-            <p class="text-slate-700 text-[10px] uppercase tracking-[0.5em] font-bold">XGBoost Native Booster • AWS Infrastructure</p>
-        </footer>
     </div>
 
     <script>
-        let myChart;
-        const AWS_IP = "16.16.131.10"; // Your Verified Public IP
+        let solarChart;
+        const IP = "16.16.131.10";
 
-        function toggleModal() {
-            document.getElementById('infoModal').classList.toggle('hidden');
+        async function fetchAll() {
+            const pinVal = document.getElementById('pin').value;
+            const unitCost = document.getElementById('cost').value || 8.0;
+
+            const res = await fetch(`http://${IP}/predict`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ pincode: pinVal, avg_daily_usage: 10, unit_cost: parseFloat(unitCost) })
+            });
+            const d = await res.json();
+
+            document.getElementById('city-text').innerText = d.city;
+            document.getElementById('ghi-text').innerText = d.prediction;
+            document.getElementById('save-text').innerText = d.savings_hourly;
+
+            const outRes = await fetch(`http://${IP}/outlook?lat=${d.lat}&lon=${d.lon}`);
+            const outD = await outRes.json();
+            
+            // 15-Day Math: (Avg Noon Flux / 1000) * (5 Peak Hours) * Cost * 15 Days
+            const total = outD.reduce((a, b) => a + (b.max_potential / 1000 * 5 * unitCost), 0);
+            document.getElementById('total-15').innerText = `15-Day Forecast: ₹${total.toFixed(0)} SAVED`;
+            
+            drawChart(outD);
         }
 
-        async function fetchAllData() {
-            const pin = document.getElementById('pincodeInput').value;
-            const badge = document.getElementById('status-badge');
-            const cityDiv = document.getElementById('city-display');
-
-            if (pin.length !== 6) {
-                alert("Please enter a valid 6-digit Pincode.");
-                return;
-            }
-
-            badge.innerText = "Connecting to AWS Cloud...";
-            badge.classList.add('animate-pulse');
-
-            try {
-                // 1. Prediction Request to AWS (Port 80)
-                const predRes = await fetch(`http://${AWS_IP}/predict`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ pincode: pin })
-                });
-                
-                const data = await predRes.json();
-                if (!predRes.ok) throw new Error(data.detail || "API Offline");
-
-                // Update UI
-                cityDiv.innerText = data.city || "Area: " + pin;
-                document.getElementById('ghi-val').innerText = data.prediction;
-                document.getElementById('m-temp').innerText = `${data.metadata.temp}°C`;
-                document.getElementById('m-sky').innerText = data.metadata.condition;
-                document.getElementById('m-coords').innerText = `SAT_FIX: ${data.lat.toFixed(3)}, ${data.lon.toFixed(3)}`;
-
-                // 2. Outlook Request to AWS (Port 80)
-                const outlookRes = await fetch(`http://${AWS_IP}/outlook?lat=${data.lat}&lon=${data.lon}`);
-                const outlookData = await outlookRes.json();
-                renderChart(outlookData);
-
-                badge.innerText = "Network Handshake OK";
-                badge.classList.replace('text-slate-400', 'text-emerald-400');
-                badge.classList.remove('animate-pulse');
-
-            } catch (err) {
-                console.error(err);
-                badge.innerText = "Connection Failed";
-                badge.classList.replace('text-slate-400', 'text-red-400');
-                badge.classList.remove('animate-pulse');
-                cityDiv.innerText = "--";
-            }
-        }
-
-        function renderChart(data) {
-            const ctx = document.getElementById('forecastChart').getContext('2d');
-            if (myChart) myChart.destroy();
-            myChart = new Chart(ctx, {
+        function drawChart(data) {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            if (solarChart) solarChart.destroy();
+            solarChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data.map(d => d.day),
+                    labels: data.map(i => i.day.split('-').slice(1).join('/')),
                     datasets: [{
-                        label: 'Max GHI',
-                        data: data.map(d => d.max_potential),
+                        data: data.map(i => i.max_potential),
                         borderColor: '#f97316',
-                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                        fill: true,
-                        tension: 0.4,
-                        borderWidth: 3,
-                        pointRadius: 3
+                        backgroundColor: 'rgba(249, 115, 22, 0.05)',
+                        fill: true, tension: 0.4, borderWidth: 5, pointRadius: 0
                     }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
-                        x: { grid: { display: false }, ticks: { color: '#64748b' } }
-                    }
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                    scales: { y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#475569' } }, x: { grid: { display: false }, ticks: { color: '#475569' } } }
                 }
             });
         }
