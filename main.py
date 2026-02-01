@@ -70,9 +70,6 @@ def get_coords_with_city(pincode: str):
 # --- ENDPOINTS ---
 @app.post("/predict")
 async def predict_solar(req: PincodeRequest):
-    if model is None or pt_y is None:
-        raise HTTPException(status_code=500, detail="Model assets not loaded")
-        
     try:
         lat, lon, city = get_coords_with_city(req.pincode)
         if lat is None:
@@ -80,8 +77,18 @@ async def predict_solar(req: PincodeRequest):
 
         API_KEY = os.getenv("TOMORROW_API_KEY")
         weather_url = f"https://api.tomorrow.io/v4/weather/realtime?location={lat},{lon}&apikey={API_KEY}"
-        w_res = requests.get(weather_url).json()
-        vals = w_res['data']['values']
+        response = requests.get(weather_url, timeout=5)
+        w_res = response.json()
+        
+        # --- NEW SAFETY CHECK ---
+        if 'data' not in w_res:
+            print(f"⚠️ Weather API Error: {w_res.get('message', 'Unknown Error')}")
+            # Fallback to default values if API is blocked/limited
+            vals = {'temperature': 25, 'humidity': 50, 'pressureSurfaceLevel': 1013, 'windSpeed': 5}
+            condition = "API Rate Limited (Using Defaults)"
+        else:
+            vals = w_res['data']['values']
+            condition = "Analysis Successful"
         
         ts = pd.Timestamp.now(tz='UTC')
         loc = pvlib.location.Location(lat, lon)
@@ -112,10 +119,11 @@ async def predict_solar(req: PincodeRequest):
             "prediction": max(0, round(float(pred_raw), 2)),
             "city": city,
             "lat": lat, "lon": lon,
-            "metadata": {"temp": vals.get('temperature'), "condition": "Analysis Successful"}
+            "metadata": {"temp": vals.get('temperature'), "condition": condition}
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Prediction Crash: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @app.get("/outlook")
 async def get_outlook(lat: float, lon: float):
