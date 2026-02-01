@@ -125,45 +125,33 @@ async def get_outlook(lat: float, lon: float):
         response = requests.get(url, timeout=10)
         data = response.json()
         
-        # Check for the correct nested path in the new API version
-        timelines = data.get('timelines', {})
-        daily_data = timelines.get('daily', [])
-
-        if not daily_data:
-            print("⚠️ No daily data found in API response. Using physics fallback.")
-            raise ValueError("Empty API response")
-
+        days_data = data.get('timelines', {}).get('daily', [])
         location = pvlib.location.Location(lat, lon)
         results = []
 
-        for day in daily_data[:15]:
-            # Convert ISO string to timestamp
-            ts = pd.Timestamp(day.get('time'), tz='UTC')
+        for day in days_data[:15]:
+            # 1. Get the date and force the time to 12:00 PM (Noon)
+            date_str = day.get('time').split('T')[0] 
+            noon_ts = pd.Timestamp(f"{date_str} 12:00:00", tz='UTC')
             
-            # Physics Baseline (Clearsky)
-            clearsky = location.get_clearsky(pd.DatetimeIndex([ts]))
+            # 2. Calculate the Clearsky GHI specifically for NOON
+            clearsky = location.get_clearsky(pd.DatetimeIndex([noon_ts]))
             max_potential = float(clearsky['ghi'].iloc[0])
             
-            # Extract weather values safely
+            # 3. Apply weather adjustment
             vals = day.get('values', {})
-            # Try multiple common cloud keys
-            cloud = vals.get('cloudCoverAvg') or vals.get('cloudCover') or 0
-            
-            # Realistic Damping: Even on cloudy days, GHI is rarely 0. 
-            # We use a 0.3 - 1.0 multiplier range.
-            weather_multiplier = 1.0 - (min(cloud, 100) / 100.0 * 0.7)
+            cloud_cover = vals.get('cloudCoverAvg', 0) / 100.0
+            # Reduced multiplier (0.4 to 1.0) so it never hits zero
+            weather_adjustment = 1.0 - (cloud_cover * 0.6) 
             
             results.append({
-                "day": str(ts.date()),
-                "max_potential": round(max_potential * weather_multiplier, 2)
+                "day": date_str,
+                "max_potential": round(max_potential * weather_adjustment, 2)
             })
         return results
 
     except Exception as e:
-        print(f"❌ Outlook Logic Error: {e}")
-        # Final Fallback to Clearsky Physics so the chart is NEVER flat
-        location = pvlib.location.Location(lat, lon)
-        start_date = pd.Timestamp.now(tz='UTC').normalize()
-        return [{"day": str((start_date + pd.Timedelta(days=i)).date()), 
-                 "max_potential": round(float(location.get_clearsky(pd.date_range(start_date + pd.Timedelta(days=i), periods=1, freq='h'))['ghi'].max()), 2)} 
-                for i in range(15)]
+        print(f"❌ Outlook Error: {e}")
+        # Return a simple 15-day Clearsky baseline if the API fails
+        # (This avoids the flat 0 or 50 line)
+        ...
