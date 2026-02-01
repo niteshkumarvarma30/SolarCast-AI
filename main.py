@@ -129,16 +129,19 @@ async def get_outlook(lat: float, lon: float):
         location = pvlib.location.Location(lat, lon)
         results = []
 
-        # If API gives no data, trigger fallback immediately
         if not days_data:
             raise ValueError("No daily data from API")
 
         for day in days_data[:15]:
             date_str = day.get('time').split('T')[0] 
-            noon_ts = pd.Timestamp(f"{date_str} 12:00:00", tz='UTC')
             
-            clearsky = location.get_clearsky(pd.DatetimeIndex([noon_ts]))
-            max_potential = float(clearsky['ghi'].iloc[0])
+            # --- NEW ROBUST LOGIC ---
+            # Create a 4-hour window (10:00 to 14:00) to find the absolute peak
+            times = pd.date_range(start=f"{date_str} 10:00:00", end=f"{date_str} 14:00:00", freq='h', tz='UTC')
+            clearsky = location.get_clearsky(times)
+            
+            # Use the MAX value in that window (Noon peak)
+            max_potential = float(clearsky['ghi'].max())
             
             vals = day.get('values', {})
             cloud_cover = vals.get('cloudCoverAvg', 0) / 100.0
@@ -146,21 +149,22 @@ async def get_outlook(lat: float, lon: float):
             
             results.append({
                 "day": date_str,
-                "max_potential": round(max_potential * weather_adjustment, 2)
+                "max_potential": round(max(50, max_potential * weather_adjustment), 2)
             })
         return results
 
     except Exception as e:
-        print(f"❌ Outlook Error (Using Fallback): {e}")
+        print(f"❌ Outlook Error (Using Robust Fallback): {e}")
+        # Fallback also uses the 4-hour peak window for accuracy
         location = pvlib.location.Location(lat, lon)
         start_date = pd.Timestamp.now(tz='UTC').normalize()
         fallback_results = []
         for i in range(15):
-            day = start_date + pd.Timedelta(days=i)
-            noon_ts = day + pd.Timedelta(hours=12)
-            clearsky = location.get_clearsky(pd.DatetimeIndex([noon_ts]))
+            day_str = str((start_date + pd.Timedelta(days=i)).date())
+            times = pd.date_range(start=f"{day_str} 10:00:00", end=f"{day_str} 14:00:00", freq='h', tz='UTC')
+            clearsky = location.get_clearsky(times)
             fallback_results.append({
-                "day": str(day.date()), 
-                "max_potential": round(float(clearsky['ghi'].iloc[0]), 2)
+                "day": day_str, 
+                "max_potential": round(float(clearsky['ghi'].max()), 2)
             })
         return fallback_results
