@@ -21,7 +21,6 @@ app.add_middleware(
 )
 
 # --- GLOBAL CONSTANTS ---
-# Moved here so it's globally accessible to all endpoints
 expected_columns = [
     "Month", "Hour", "Temperature", "Relative Humidity", "Pressure", 
     "Wind Speed", "Solar Zenith Angle", "Clearsky GHI", "lat", "long", 
@@ -34,11 +33,8 @@ pt_y = None
 
 try:
     model_obj = joblib.load('assets/solar_xgboost_model_v2.pkl')
-    # Use global keywords to update the variables defined above
     model = model_obj.get_booster() if hasattr(model_obj, "get_booster") else model_obj
     pt_y = joblib.load('assets/target_transformer_v2.pkl')
-    
-    # Apply feature names to the booster
     model.feature_names = expected_columns
     print("✅ Assets loaded and synchronized.")
 except Exception as e:
@@ -80,10 +76,7 @@ async def predict_solar(req: PincodeRequest):
         response = requests.get(weather_url, timeout=5)
         w_res = response.json()
         
-        # --- NEW SAFETY CHECK ---
         if 'data' not in w_res:
-            print(f"⚠️ Weather API Error: {w_res.get('message', 'Unknown Error')}")
-            # Fallback to default values if API is blocked/limited
             vals = {'temperature': 25, 'humidity': 50, 'pressureSurfaceLevel': 1013, 'windSpeed': 5}
             condition = "API Rate Limited (Using Defaults)"
         else:
@@ -117,8 +110,7 @@ async def predict_solar(req: PincodeRequest):
 
         return {
             "prediction": max(0, round(float(pred_raw), 2)),
-            "city": city,
-            "lat": lat, "lon": lon,
+            "city": city, "lat": lat, "lon": lon,
             "metadata": {"temp": vals.get('temperature'), "condition": condition}
         }
     except Exception as e:
@@ -137,19 +129,19 @@ async def get_outlook(lat: float, lon: float):
         location = pvlib.location.Location(lat, lon)
         results = []
 
+        # If API gives no data, trigger fallback immediately
+        if not days_data:
+            raise ValueError("No daily data from API")
+
         for day in days_data[:15]:
-            # 1. Get the date and force the time to 12:00 PM (Noon)
             date_str = day.get('time').split('T')[0] 
             noon_ts = pd.Timestamp(f"{date_str} 12:00:00", tz='UTC')
             
-            # 2. Calculate the Clearsky GHI specifically for NOON
             clearsky = location.get_clearsky(pd.DatetimeIndex([noon_ts]))
             max_potential = float(clearsky['ghi'].iloc[0])
             
-            # 3. Apply weather adjustment
             vals = day.get('values', {})
             cloud_cover = vals.get('cloudCoverAvg', 0) / 100.0
-            # Reduced multiplier (0.4 to 1.0) so it never hits zero
             weather_adjustment = 1.0 - (cloud_cover * 0.6) 
             
             results.append({
@@ -159,7 +151,16 @@ async def get_outlook(lat: float, lon: float):
         return results
 
     except Exception as e:
-        print(f"❌ Outlook Error: {e}")
-        # Return a simple 15-day Clearsky baseline if the API fails
-        # (This avoids the flat 0 or 50 line)
-        ...
+        print(f"❌ Outlook Error (Using Fallback): {e}")
+        location = pvlib.location.Location(lat, lon)
+        start_date = pd.Timestamp.now(tz='UTC').normalize()
+        fallback_results = []
+        for i in range(15):
+            day = start_date + pd.Timedelta(days=i)
+            noon_ts = day + pd.Timedelta(hours=12)
+            clearsky = location.get_clearsky(pd.DatetimeIndex([noon_ts]))
+            fallback_results.append({
+                "day": str(day.date()), 
+                "max_potential": round(float(clearsky['ghi'].iloc[0]), 2)
+            })
+        return fallback_results
