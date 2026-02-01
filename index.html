@@ -3,99 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SolarCast AI | 2026 Home Solar Portal</title>
+    <title>SolarCast AI | 2026 Home Investment Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .glass-card { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        .orange-glow { box-shadow: 0 0 40px rgba(249, 115, 22, 0.1); }
         input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
     </style>
 </head>
 <body class="bg-[#05070a] text-slate-100 min-h-screen p-4 md:p-10 font-sans">
 
-    <div class="max-w-6xl mx-auto space-y-10">
-        
-        <header class="flex flex-col lg:flex-row justify-between items-center gap-8 bg-slate-900/50 p-6 rounded-[3rem] border border-white/5 shadow-2xl">
+    <div class="max-w-6xl mx-auto space-y-8">
+        <header class="flex flex-col lg:flex-row justify-between items-center gap-8 bg-slate-900/50 p-6 rounded-[2rem] border border-white/5 shadow-2xl">
             <div class="text-center lg:text-left">
-                <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-yellow-400 italic italic">SolarCast AI</h1>
-                <p class="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em] mt-1">AWS Powered • 2026 Economics</p>
+                <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-yellow-400 italic">SolarCast AI</h1>
+                <p class="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em]">XGBoost AI • 2026 Economics</p>
             </div>
-
             <div class="flex flex-col md:flex-row gap-4 w-full lg:w-auto">
-                <input id="pin" type="number" placeholder="PIN" class="bg-slate-800 px-6 py-4 rounded-2xl outline-none w-full md:w-28 font-bold text-orange-400 border border-white/5 focus:border-orange-500">
-                <input id="usage" type="number" placeholder="Avg Units/Day" class="bg-slate-800 px-6 py-4 rounded-2xl outline-none w-full md:w-36 font-bold text-white border border-white/5 focus:border-orange-500">
-                <input id="cost" type="number" placeholder="₹/Unit Cost" class="bg-slate-800 px-6 py-4 rounded-2xl outline-none w-full md:w-32 font-bold text-white border border-white/5 focus:border-orange-500">
-                <button onclick="fetchAll()" class="bg-orange-500 hover:bg-orange-600 px-10 py-4 rounded-2xl font-black tracking-widest transition-all active:scale-95 shadow-lg">ANALYZE</button>
+                <input id="pin" type="number" placeholder="PIN" class="bg-slate-800 px-6 py-3 rounded-xl outline-none w-full md:w-28 font-bold text-orange-400 border border-white/5 focus:border-orange-500">
+                <input id="usage" type="number" placeholder="Daily Units" class="bg-slate-800 px-6 py-3 rounded-xl outline-none w-full md:w-32 font-bold text-white border border-white/5 focus:border-orange-500">
+                <input id="cost" type="number" placeholder="₹/Unit" class="bg-slate-800 px-6 py-3 rounded-xl outline-none w-full md:w-28 font-bold text-white border border-white/5 focus:border-orange-500">
+                <button onclick="fetchAll()" class="bg-orange-500 hover:bg-orange-600 px-10 py-3 rounded-xl font-black tracking-widest transition-all shadow-lg active:scale-95">ANALYZE</button>
             </div>
         </header>
 
+        <div id="api-alert" class="hidden bg-orange-500/10 border border-orange-500/50 p-4 rounded-xl text-orange-400 text-center font-bold text-sm"></div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div class="lg:col-span-1 glass-card p-10 rounded-[4rem] text-center orange-glow">
-                <p id="city-text" class="text-orange-400 text-3xl font-black italic uppercase mb-2 tracking-tighter">--</p>
-                <div class="py-10">
+            <div class="lg:col-span-1 glass-card p-10 rounded-[3rem] text-center">
+                <p id="city-text" class="text-orange-400 text-3xl font-black italic uppercase tracking-tighter mb-2">--</p>
+                <div class="py-8">
                     <span id="ghi-text" class="text-9xl font-black text-white tracking-tighter leading-none">0</span>
-                    <p class="text-slate-500 font-bold uppercase text-[10px] tracking-[0.5em] mt-6 leading-none">Watts / m² Prediction</p>
+                    <p class="text-slate-500 font-bold uppercase text-[10px] tracking-[0.4em] mt-4">Watts / m² Prediction</p>
                 </div>
-                <div class="bg-orange-500/10 p-8 rounded-[2.5rem] border border-orange-500/20">
-                    <p class="text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-widest">Savings Potential</p>
-                    <p class="text-orange-500 text-6xl font-black tracking-tighter leading-none">₹<span id="save-text">0.00</span><span class="text-sm italic">/hr</span></p>
+                <div class="bg-orange-500/10 p-8 rounded-[2rem] border border-orange-500/20">
+                    <p class="text-slate-400 text-[10px] uppercase font-bold mb-1 tracking-widest leading-none">Savings Potential</p>
+                    <p class="text-orange-500 text-5xl font-black tracking-tighter leading-none">₹<span id="save-text">0.00</span><span class="text-sm">/hr</span></p>
                 </div>
             </div>
 
-            <div class="lg:col-span-2 glass-card p-12 rounded-[4rem]">
+            <div class="lg:col-span-2 glass-card p-10 rounded-[3rem]">
                 <div class="flex justify-between items-center mb-8">
-                    <p class="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">AI-Adjusted 15-Day Outlook</p>
-                    <div id="total-15" class="text-emerald-400 font-black italic text-xl px-4 py-2 bg-emerald-500/5 rounded-xl border border-emerald-500/10"></div>
+                    <p class="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">15-Day Peak Outlook (Noon-Only)</p>
+                    <div id="total-15" class="text-emerald-400 font-black italic text-lg px-4 py-2 bg-emerald-500/5 rounded-xl border border-emerald-500/10"></div>
                 </div>
                 <div class="h-80"><canvas id="mainChart"></canvas></div>
             </div>
         </div>
 
-        <div class="glass-card p-12 rounded-[4rem] border-t-8 border-orange-500 space-y-12">
+        <div class="glass-card p-10 rounded-[3rem] border-t-8 border-orange-500">
             <div class="flex flex-col xl:flex-row justify-between items-center gap-10">
                 <div class="flex-1 space-y-4">
-                    <h2 class="text-4xl font-black text-white italic tracking-tight uppercase">PM Surya Ghar: Muft Bijli Yojana</h2>
-                    <p class="text-slate-400 text-lg leading-relaxed">
-                        The Government of India's flagship 2026 rooftop solar scheme aim to reduce electricity bills by providing <strong>up to ₹78,000 subsidy</strong> for residential households.
-                    </p>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-                        <div class="bg-white/5 p-6 rounded-3xl border border-white/5 text-center">
-                            <p class="text-white font-black text-3xl tracking-tighter">₹30,000</p>
+                    <h2 class="text-4xl font-black text-white italic italic tracking-tight uppercase">PM Surya Ghar: Muft Bijli Yojana</h2>
+                    <p class="text-slate-400 leading-relaxed max-w-2xl">India's flagship 2026 rooftop solar scheme. Providing direct financial assistance to lower electricity bills and secure energy independence.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                        <div class="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+                            <p class="text-orange-500 font-black text-2xl">₹30,000</p>
                             <p class="text-slate-500 text-[10px] font-bold uppercase mt-1">1 kW Subsidy</p>
                         </div>
-                        <div class="bg-white/5 p-6 rounded-3xl border border-white/5 text-center">
-                            <p class="text-white font-black text-3xl tracking-tighter">₹60,000</p>
+                        <div class="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+                            <p class="text-orange-500 font-black text-2xl">₹60,000</p>
                             <p class="text-slate-500 text-[10px] font-bold uppercase mt-1">2 kW Subsidy</p>
                         </div>
-                        <div class="bg-white/5 p-6 rounded-3xl border border-white/5 text-center">
-                            <p class="text-white font-black text-3xl tracking-tighter">₹78,000</p>
+                        <div class="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+                            <p class="text-orange-500 font-black text-2xl">₹78,000</p>
                             <p class="text-slate-500 text-[10px] font-bold uppercase mt-1">Max Subsidy</p>
                         </div>
                     </div>
                 </div>
-                <div class="w-full xl:w-1/3 flex flex-col items-center justify-center p-8 bg-orange-500 rounded-[3rem] shadow-2xl shadow-orange-500/20">
-                    <p class="text-slate-900 font-black text-xl mb-4 text-center">Ready to go Solar?</p>
-                    <a href="https://pmsuryaghar.gov.in/#/" target="_blank" class="w-full bg-white text-orange-500 px-8 py-5 rounded-2xl font-black text-center shadow-xl hover:scale-105 transition-transform tracking-widest">APPLY ON GOVT PORTAL</a>
-                    <p class="text-slate-800 text-[10px] font-bold mt-4">Official Website: pmsuryaghar.gov.in</p>
+                <div class="w-full xl:w-1/3 flex flex-col items-center bg-orange-500 p-8 rounded-[2rem] shadow-xl">
+                    <p class="text-slate-900 font-black text-xl mb-4">Go Solar in 2026</p>
+                    <a href="https://pmsuryaghar.gov.in/#/" target="_blank" class="w-full bg-white text-orange-500 px-6 py-4 rounded-xl font-black text-center shadow-lg hover:scale-105 transition-transform tracking-widest">APPLY ON GOVT PORTAL</a>
+                    <p class="text-slate-800 text-[9px] font-bold mt-4 uppercase tracking-widest">pmsuryaghar.gov.in</p>
                 </div>
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-12 pt-8 border-t border-white/5">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-10 border-t border-white/5 mt-10">
                 <div>
-                    <h4 class="text-white font-black text-xl mb-6 italic">2026 Benchmark Costs (approx)</h4>
+                    <h4 class="text-white font-black text-lg mb-4 italic">Benchmark Costs (Pre-Subsidy)</h4>
                     <table class="w-full text-sm text-left">
-                        <tr class="border-b border-white/5"><th class="py-3 text-slate-500">1 kW System</th><th class="py-3 text-white">₹40k – ₹50k</th></tr>
-                        <tr class="border-b border-white/5"><th class="py-3 text-slate-500">3 kW System</th><th class="py-3 text-white">₹1.2L – ₹1.5L</th></tr>
-                        <tr class="border-b border-white/5"><th class="py-3 text-slate-500">5 kW System</th><th class="py-3 text-white">₹2.0L – ₹3.5L</th></tr>
+                        <tr class="border-b border-white/5"><td class="py-2 text-slate-400">1 kW System</td><td class="py-2 text-white font-bold">₹40,000 – ₹50,000</td></tr>
+                        <tr class="border-b border-white/5"><td class="py-2 text-slate-400">3 kW System</td><td class="py-2 text-white font-bold">₹1.2L – ₹1.5L</td></tr>
+                        <tr class="border-b border-white/5"><td class="py-2 text-slate-400">5 kW System</td><td class="py-2 text-white font-bold">₹2.0L – ₹3.5L</td></tr>
                     </table>
                 </div>
                 <div>
-                    <h4 class="text-white font-black text-xl mb-6 italic">Investment Insights</h4>
-                    <ul class="space-y-4 text-sm text-slate-400 font-medium">
+                    <h4 class="text-white font-black text-lg mb-4 italic">Investment ROI</h4>
+                    <ul class="space-y-3 text-xs font-bold uppercase tracking-wider text-slate-400">
                         <li class="flex items-center gap-3"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span> Payback Period: 4 to 6 Years</li>
-                        <li class="flex items-center gap-3"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span> Return on Investment: 15% to 20% Annually</li>
-                        <li class="flex items-center gap-3"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span> System Lifespan: 25+ Years</li>
+                        <li class="flex items-center gap-3"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span> Annual ROI: 15% to 20%</li>
+                        <li class="flex items-center gap-3"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span> System Life: 25+ Years</li>
                     </ul>
                 </div>
             </div>
@@ -109,13 +106,21 @@
         async function fetchAll() {
             const pinVal = document.getElementById('pin').value;
             const costVal = document.getElementById('cost').value || 8;
+            const usageVal = document.getElementById('usage').value || 10;
 
             const res = await fetch(`http://${IP}/predict`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ pincode: pinVal, avg_daily_usage: 10, unit_cost: parseFloat(costVal) })
+                body: JSON.stringify({ pincode: pinVal, avg_daily_usage: parseFloat(usageVal), unit_cost: parseFloat(costVal) })
             });
             const d = await res.json();
+
+            // Status Badge Alert
+            const alertBox = document.getElementById('api-alert');
+            if (d.metadata.condition.includes("LIMIT REACHED")) {
+                alertBox.classList.remove('hidden');
+                alertBox.innerText = "⚠️ API Limit Reached: Using Physics-Only Estimates";
+            } else { alertBox.classList.add('hidden'); }
 
             document.getElementById('city-text').innerText = d.city;
             document.getElementById('ghi-text').innerText = Math.round(d.prediction);
@@ -124,8 +129,8 @@
             const outRes = await fetch(`http://${IP}/outlook?lat=${d.lat}&lon=${d.lon}`);
             const outD = await outRes.json();
             
-            // Calc total 15-day savings
-            const total = outD.reduce((acc, d) => acc + (d.max_potential / 1000 * 5 * costVal), 0);
+            // Calc total 15-day savings based on 5 peak noon hours/day
+            const total = outD.reduce((acc, i) => acc + (i.max_potential / 1000 * 5 * costVal), 0);
             document.getElementById('total-15').innerText = `SAVING ₹${Math.round(total)}`;
             
             renderChart(outD);
