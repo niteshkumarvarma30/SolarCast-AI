@@ -12,9 +12,8 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv() 
-app = FastAPI(title="SolarCast Global Enterprise API")
+app = FastAPI(title="SolarCast Enterprise API")
 
-# --- GLOBAL CORS CONFIG ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -33,11 +32,11 @@ try:
     model.feature_names = expected_columns
     print("✅ Assets Synchronized.")
 except Exception as e:
-    print(f"❌ Asset Error: {e}")
+    print(f"❌ Initialization Error: {e}")
 
 class ForecastRequest(BaseModel):
-    pincode: str = Field(..., description="Target Location ZIP")
-    unit_cost: float = Field(..., description="Current Utility Rate")
+    pincode: str = Field(..., description="Target Location PIN")
+    unit_cost: float = Field(..., description="Utility Rate")
 
 def get_location_data(pincode: str):
     backups = {"821304": (24.91, 84.18, "Dehri"), "110001": (28.61, 77.23, "New Delhi")}
@@ -55,7 +54,7 @@ def get_location_data(pincode: str):
 async def get_live_inference(req: ForecastRequest):
     try:
         lat, lon, city = get_location_data(req.pincode)
-        if lat is None: raise HTTPException(status_code=400, detail="Invalid Geo-Location")
+        if lat is None: raise HTTPException(status_code=400, detail="Invalid PIN")
 
         API_KEY = os.getenv("TOMORROW_API_KEY")
         weather_url = f"https://api.tomorrow.io/v4/weather/realtime?location={lat},{lon}&apikey={API_KEY}"
