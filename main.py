@@ -5,7 +5,7 @@ import numpy as np
 import pvlib
 import requests
 import xgboost as xgb
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -97,8 +97,9 @@ async def get_live_inference(req: ForecastRequest):
 async def get_enterprise_outlook(lat: float, lon: float, cost: float):
     location = pvlib.location.Location(lat, lon)
     start_date = pd.Timestamp.now(tz='UTC').normalize()
-    daily_results = []
     
+    # --- 15-Day Physics Outlook ---
+    daily_results = []
     capacities = [1.0, 3.0, 5.0]
     totals = {cap: 0 for cap in capacities}
 
@@ -113,13 +114,22 @@ async def get_enterprise_outlook(lat: float, lon: float, cost: float):
         
         avg_flux = np.mean(flux_values)
         for cap in capacities:
-            # ROI Math: (Flux/1000) * kW * 5 peak hours
             totals[cap] += (avg_flux / 1000) * cap * 5
             
         daily_results.append({"day": str(day.date()), "money": round((avg_flux/1000)*1*5*cost, 2)})
 
+    # --- 24-Hour AI Forecast (Mocked for Demo) ---
+    # In a real scenario, you would call a weather API for hourly data
+    hourly_results = []
+    for i in range(24):
+        hour_ts = start_date + pd.Timedelta(hours=i)
+        # Mocking AI output with a realistic diurnal curve
+        mock_flux = max(0, 800 * np.sin(np.pi * (i - 6) / 12)) if 6 <= i <= 18 else 0
+        hourly_results.append({"hour": hour_ts.strftime("%H:00"), "flux": round(mock_flux, 2)})
+
     return {
         "outlook": daily_results,
+        "hourly_forecast": hourly_results,
         "comparison": [
             {"size": f"{cap}kW", "units": round(totals[cap], 1), "savings": round(totals[cap]*cost, 0)}
             for cap in capacities

@@ -9,6 +9,7 @@
     <style>
         .enterprise-card { background: #0f172a; border: 1px solid rgba(255,255,255,0.05); }
         .accent-gradient { background: linear-gradient(135deg, #f97316 0%, #fbbf24 100%); }
+        .tab-active { background: rgba(249, 115, 22, 0.1); color: #f97316; border-color: #f97316; }
     </style>
 </head>
 <body class="bg-[#020617] text-slate-200 font-sans leading-relaxed">
@@ -42,9 +43,15 @@
             </div>
 
             <div class="lg:col-span-8 enterprise-card p-10 rounded-[3rem]">
-                <div class="flex justify-between items-center mb-10">
-                    <h2 class="text-xl font-bold italic uppercase tracking-tight">15-Day Generation Intelligence</h2>
-                    <span class="text-[10px] bg-white/5 px-4 py-2 rounded-lg font-bold text-slate-500 tracking-widest uppercase">Daylight Average (9AM-3PM)</span>
+                <div class="flex gap-4 mb-8">
+                    <button id="tab-15d" onclick="switchTab('15d')" class="tab-active px-6 py-3 rounded-xl border border-white/5 font-bold text-sm uppercase tracking-widest transition-all">15-Day Physics Outlook</button>
+                    <button id="tab-24h" onclick="switchTab('24h')" class="px-6 py-3 rounded-xl border border-white/5 font-bold text-sm uppercase tracking-widest transition-all">24-Hour AI Forecast</button>
+                </div>
+                <div id="desc-15d" class="mb-6">
+                    <p class="text-slate-400 text-sm">This graph uses a <span class="text-orange-500 font-bold">Physics-Based Model</span> to project solar potential over the next 15 days, averaging daylight hours (9 AM - 3 PM) to estimate long-term generation trends.</p>
+                </div>
+                <div id="desc-24h" class="hidden mb-6">
+                    <p class="text-slate-400 text-sm">This graph uses our <span class="text-orange-500 font-bold">XGBoost AI Model</span> to provide a high-resolution, hour-by-hour forecast for the next 24 hours, capturing realistic diurnal cycles.</p>
                 </div>
                 <div class="h-80"><canvas id="forecastChart"></canvas></div>
             </div>
@@ -85,6 +92,7 @@
 
     <script>
         let mainChart;
+        let currentData15d, currentData24h;
         const AWS_IP = "16.16.131.10";
 
         async function runAnalysis() {
@@ -94,9 +102,7 @@
 
             try {
                 const res = await fetch(`http://${AWS_IP}/predict`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ pincode: pin, unit_cost: parseFloat(cost) })
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ pincode: pin, unit_cost: parseFloat(cost) })
                 });
                 const d = await res.json();
                 
@@ -111,9 +117,26 @@
                 const outRes = await fetch(`http://${AWS_IP}/outlook?lat=${d.lat}&lon=${d.lon}&cost=${cost}`);
                 const outD = await outRes.json();
                 
-                renderChart(outD.outlook);
+                currentData15d = outD.outlook;
+                currentData24h = outD.hourly_forecast;
                 renderComparison(outD.comparison);
+                switchTab('15d'); // Default to 15-day view
             } catch (err) { alert("System Offline: Check API configuration."); }
+        }
+
+        function switchTab(tab) {
+            const btn15 = document.getElementById('tab-15d'); const btn24 = document.getElementById('tab-24h');
+            const desc15 = document.getElementById('desc-15d'); const desc24 = document.getElementById('desc-24h');
+            
+            if (tab === '15d') {
+                btn15.classList.add('tab-active'); btn24.classList.remove('tab-active');
+                desc15.classList.remove('hidden'); desc24.classList.add('hidden');
+                if (currentData15d) renderChart(currentData15d, 'day', 'money', 'Daily Revenue (₹)');
+            } else {
+                btn24.classList.add('tab-active'); btn15.classList.remove('tab-active');
+                desc24.classList.remove('hidden'); desc15.classList.add('hidden');
+                if (currentData24h) renderChart(currentData24h, 'hour', 'flux', 'Hourly Flux (W/m²)');
+            }
         }
 
         function renderComparison(comparison) {
@@ -129,22 +152,23 @@
             `).join('');
         }
 
-        function renderChart(data) {
+        function renderChart(data, labelKey, dataKey, yAxisLabel) {
             const ctx = document.getElementById('forecastChart').getContext('2d');
             if (mainChart) mainChart.destroy();
             mainChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data.map(i => i.day.split('-').slice(1).join('/')),
+                    labels: data.map(i => i[labelKey]),
                     datasets: [{
-                        data: data.map(i => i.money),
-                        borderColor: '#f97316',
-                        backgroundColor: 'rgba(249, 115, 22, 0.05)',
-                        fill: true, tension: 0.4, borderWidth: 6, pointRadius: 0
+                        label: yAxisLabel,
+                        data: data.map(i => i[dataKey]),
+                        borderColor: '#f97316', backgroundColor: 'rgba(249, 115, 22, 0.05)',
+                        fill: true, tension: 0.4, borderWidth: 4, pointRadius: 3, pointHoverRadius: 6
                     }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-                    scales: { y: { grid: { color: 'rgba(255,255,255,0.02)' }, ticks: { color: '#475569' } }, x: { grid: { display: false }, ticks: { color: '#475569' } } }
+                options: {
+                    responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                    scales: { y: { title: { display: true, text: yAxisLabel, color: '#475569', font: { weight: 'bold' } }, grid: { color: 'rgba(255,255,255,0.02)' }, ticks: { color: '#475569' } }, x: { grid: { display: false }, ticks: { color: '#475569', maxTicksLimit: 8 } } }
                 }
             });
         }
