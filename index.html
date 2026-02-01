@@ -3,26 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SolarCast AI | 2026 Manual ROI</title>
+    <title>SolarCast AI | Energy Generation Forecast</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .glass-card { background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255, 255, 255, 0.05); }
-        .profit-pos { color: #10b981; } .profit-neg { color: #ef4444; }
     </style>
 </head>
 <body class="bg-[#05070a] text-slate-100 min-h-screen p-4 md:p-10 font-sans">
     <div class="max-w-6xl mx-auto space-y-8">
         <header class="flex flex-col lg:flex-row justify-between items-center gap-6 bg-slate-900/50 p-6 rounded-[2rem] border border-white/5">
             <div>
-                <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-yellow-400 italic leading-tight">SolarCast AI</h1>
-                <p class="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em]">XGBoost AI • Manual Input Only</p>
+                <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-yellow-400 italic">SolarCast AI</h1>
+                <p class="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em]">XGBoost AI • Generation Forecast</p>
             </div>
             <div class="flex flex-wrap justify-center gap-3">
-                <input id="pin" type="number" placeholder="PINCODE" class="bg-slate-800 px-4 py-3 rounded-xl outline-none w-32 font-bold text-orange-400">
-                <input id="usage" type="number" placeholder="Avg Units (15d)" class="bg-slate-800 px-4 py-3 rounded-xl outline-none w-36 font-bold text-white">
-                <input id="cost" type="number" placeholder="₹/Unit" class="bg-slate-800 px-4 py-3 rounded-xl outline-none w-28 font-bold text-white">
-                <button onclick="fetchAll()" class="bg-orange-500 px-8 py-3 rounded-xl font-black tracking-widest hover:bg-orange-600 active:scale-95 transition-all">ANALYZE</button>
+                <input id="pin" type="number" placeholder="PINCODE" class="bg-slate-800 px-6 py-3 rounded-xl outline-none w-32 font-bold text-orange-400">
+                <input id="cost" type="number" placeholder="₹/Unit" class="bg-slate-800 px-6 py-3 rounded-xl outline-none w-32 font-bold text-white">
+                <button onclick="fetchAll()" class="bg-orange-500 px-10 py-3 rounded-xl font-black tracking-widest hover:bg-orange-600 active:scale-95 transition-all">ANALYZE</button>
             </div>
         </header>
 
@@ -33,27 +31,28 @@
                 <p id="city-text" class="text-orange-400 text-3xl font-black italic uppercase mb-2">--</p>
                 <div class="py-6">
                     <span id="ghi-text" class="text-9xl font-black tracking-tighter leading-none">0</span>
-                    <p class="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-4">W/m² Prediction</p>
+                    <p class="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-4">Current W/m²</p>
                 </div>
                 <div class="bg-orange-500/10 p-6 rounded-3xl border border-orange-500/20">
                     <p class="text-orange-500 text-4xl font-black tracking-tighter">₹<span id="save-text">0.00</span>/hr</p>
-                    <p class="text-slate-400 text-[9px] uppercase font-bold tracking-widest mt-1">Manual Savings Rate</p>
+                    <p class="text-slate-400 text-[9px] uppercase font-bold tracking-widest mt-1">Hourly Revenue Rate</p>
                 </div>
             </div>
 
             <div class="lg:col-span-2 glass-card p-10 rounded-[3rem]">
                 <div class="flex justify-between items-center mb-6">
-                    <p class="text-slate-500 text-xs font-bold uppercase tracking-widest">15-Day Impact Analysis</p>
-                    <div id="net-badge" class="px-4 py-2 rounded-xl border font-black text-xs uppercase text-slate-500">Awaiting Manual Data...</div>
+                    <p class="text-slate-500 text-xs font-bold uppercase tracking-widest">15-Day Generation Outlook</p>
+                    <div class="px-4 py-2 rounded-xl border border-white/5 bg-white/5 font-black text-xs uppercase text-slate-400">Location Forecast</div>
                 </div>
+                
                 <div class="grid grid-cols-2 gap-4 mb-6">
                     <div class="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
-                        <p class="text-slate-500 text-[9px] font-black uppercase mb-1 tracking-widest leading-none">Grid Baseline</p>
-                        <p id="grid-text" class="text-white text-3xl font-black">₹0</p>
+                        <p class="text-slate-500 text-[9px] font-black uppercase mb-1 tracking-widest leading-none">Total Energy (15d)</p>
+                        <p id="energy-text" class="text-white text-3xl font-black">0 <span class="text-sm">kWh</span></p>
                     </div>
-                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
-                        <p id="profit-label" class="text-slate-500 text-[9px] font-black uppercase mb-1 tracking-widest leading-none">Net Impact</p>
-                        <p id="profit-text" class="text-3xl font-black">₹0</p>
+                    <div class="bg-orange-500/5 p-4 rounded-2xl border border-orange-500/10 text-center">
+                        <p class="text-orange-500 text-[9px] font-black uppercase mb-1 tracking-widest leading-none">Total Money Generated</p>
+                        <p id="money-text" class="text-orange-500 text-3xl font-black">₹0</p>
                     </div>
                 </div>
                 <div class="h-64"><canvas id="mainChart"></canvas></div>
@@ -67,12 +66,10 @@
 
         async function fetchAll() {
             const pinVal = document.getElementById('pin').value;
-            const usageVal = document.getElementById('usage').value;
             const costVal = document.getElementById('cost').value;
 
-            // STRICT VALIDATION: Manual data only
-            if (!pinVal || !usageVal || !costVal) {
-                alert("STRICT ENTRY REQUIRED: Please enter PIN, Avg Units, and Cost per Unit manually.");
+            if (!pinVal || !costVal) {
+                alert("Please enter PIN and Cost per Unit.");
                 return;
             }
 
@@ -80,46 +77,29 @@
                 const res = await fetch(`http://${IP}/predict`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ 
-                        pincode: pinVal, 
-                        avg_daily_usage: parseFloat(usageVal), 
-                        unit_cost: parseFloat(costVal) 
-                    })
+                    body: JSON.stringify({ pincode: pinVal, unit_cost: parseFloat(costVal) })
                 });
                 const d = await res.json();
                 if (res.status !== 200) throw new Error(d.detail);
 
-                // Update API Limit Alert
                 const alertBox = document.getElementById('api-alert');
                 if (d.metadata.condition.includes("LIMIT")) {
-                    alertBox.classList.remove('hidden'); alertBox.innerText = "⚠️ API LIMIT REACHED: ENTER DETAILS MANUALLY";
+                    alertBox.classList.remove('hidden'); alertBox.innerText = "⚠️ API LIMIT REACHED: USING PHYSICS ESTIMATES";
                 } else { alertBox.classList.add('hidden'); }
 
                 document.getElementById('city-text').innerText = d.city;
                 document.getElementById('ghi-text').innerText = Math.round(d.prediction);
                 document.getElementById('save-text').innerText = d.savings_hourly;
 
-                // Pass parameters to Outlook
-                const outRes = await fetch(`http://${IP}/outlook?lat=${d.lat}&lon=${d.lon}&usage=${usageVal}&cost=${costVal}`);
+                const outRes = await fetch(`http://${IP}/outlook?lat=${d.lat}&lon=${d.lon}&cost=${costVal}`);
                 const outD = await outRes.json();
                 
-                document.getElementById('grid-text').innerText = `₹${outD.grid_baseline}`;
-                const profitEl = document.getElementById('profit-text');
-                const badgeEl = document.getElementById('net-badge');
-                
-                profitEl.innerText = `₹${Math.abs(outD.net_profit)}`;
-                if (outD.net_profit >= 0) {
-                    profitEl.className = "text-3xl font-black profit-pos";
-                    document.getElementById('profit-label').innerText = "Net Profit (15d)";
-                    badgeEl.innerText = "STATUS: PROFITABLE"; badgeEl.className = "px-4 py-2 rounded-xl border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-black text-xs uppercase";
-                } else {
-                    profitEl.className = "text-3xl font-black profit-neg";
-                    document.getElementById('profit-label').innerText = "Remaining Bill";
-                    badgeEl.innerText = "STATUS: BILL REMAINING"; badgeEl.className = "px-4 py-2 rounded-xl border-orange-500/30 bg-orange-500/10 text-orange-400 font-black text-xs uppercase";
-                }
+                document.getElementById('energy-text').innerHTML = `${outD.total_energy_kwh} <span class="text-sm">kWh</span>`;
+                document.getElementById('money-text').innerText = `₹${outD.total_money_generated}`;
+
                 renderChart(outD.outlook);
             } catch (err) {
-                alert("Analysis Error: Ensure all fields are valid numbers.");
+                alert("Error during analysis. Please check inputs.");
             }
         }
 
@@ -130,7 +110,7 @@
                 type: 'line',
                 data: {
                     labels: data.map(i => i.day.split('-').slice(1).join('/')),
-                    datasets: [{ data: data.map(i => i.daily_profit), borderColor: '#f97316', backgroundColor: 'rgba(249, 115, 22, 0.1)', fill: true, tension: 0.4, borderWidth: 4, pointRadius: 0 }]
+                    datasets: [{ data: data.map(i => i.money), borderColor: '#f97316', backgroundColor: 'rgba(249, 115, 22, 0.1)', fill: true, tension: 0.4, borderWidth: 4, pointRadius: 0 }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
             });

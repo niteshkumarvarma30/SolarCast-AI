@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv() 
-app = FastAPI(title="SolarCast AI - Manual ROI Edition")
+app = FastAPI(title="SolarCast AI - Generation Forecast Edition")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,11 +34,9 @@ try:
 except Exception as e:
     print(f"❌ Asset Error: {e}")
 
-# STRICT DATA MODEL: No Default Values
-class SolarFinancialRequest(BaseModel):
-    pincode: str = Field(..., description="User's PIN")
-    avg_daily_usage: float = Field(..., description="Manual 15d avg unit input")
-    unit_cost: float = Field(..., description="Manual unit cost input")
+class SolarForecastRequest(BaseModel):
+    pincode: str = Field(..., description="Location PIN")
+    unit_cost: float = Field(..., description="Local cost per unit")
 
 def get_coords_with_city(pincode: str):
     backups = {"812001": (25.24, 86.97, "Bhagalpur"), "110001": (28.61, 77.23, "New Delhi")}
@@ -53,7 +51,7 @@ def get_coords_with_city(pincode: str):
     return None, None, None
 
 @app.post("/predict")
-async def predict_solar(req: SolarFinancialRequest):
+async def predict_solar(req: SolarForecastRequest):
     try:
         lat, lon, city = get_coords_with_city(req.pincode)
         if lat is None: raise HTTPException(status_code=400, detail="Invalid Pincode")
@@ -62,7 +60,6 @@ async def predict_solar(req: SolarFinancialRequest):
         weather_url = f"https://api.tomorrow.io/v4/weather/realtime?location={lat},{lon}&apikey={API_KEY}"
         w_res = requests.get(weather_url, timeout=5).json()
         
-        # STRICT API LIMIT DETECTION
         condition = "Analysis Successful"
         if 'data' not in w_res:
             vals = {'temperature': 25, 'humidity': 50, 'pressureSurfaceLevel': 1013, 'windSpeed': 5}
@@ -97,18 +94,17 @@ async def predict_solar(req: SolarFinancialRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/outlook")
-async def get_outlook(lat: float, lon: float, usage: float, cost: float):
-    # This endpoint strictly requires usage and cost from the frontend
+async def get_outlook(lat: float, lon: float, cost: float):
     location = pvlib.location.Location(lat, lon)
     start_date = pd.Timestamp.now(tz='UTC').normalize()
     results = []
     
-    grid_baseline_15d = 15 * usage * cost 
-    total_solar_revenue = 0
+    total_kwh = 0
+    total_money = 0
 
     for i in range(15):
         day = start_date + pd.Timedelta(days=i)
-        samples = [9, 12, 15] # 3-point daylight average
+        samples = [9, 12, 15]
         flux_values = []
         for hr in samples:
             ts = day + pd.Timedelta(hours=hr)
@@ -116,15 +112,17 @@ async def get_outlook(lat: float, lon: float, usage: float, cost: float):
             flux_values.append(clearsky['ghi'].iloc[0])
         
         avg_flux = np.mean(flux_values)
-        daily_units = (avg_flux / 1000) * 1 * 5 # Assuming 1kW panel for 5 peak hours
-        daily_savings = daily_units * cost
-        total_solar_revenue += daily_savings
+        # 15-day Energy calculation logic
+        daily_units = (avg_flux / 1000) * 1 * 5 # (W/m2 / 1000) * 1kW * 5 hrs
+        daily_money = daily_units * cost
         
-        results.append({"day": str(day.date()), "daily_profit": round(daily_savings, 2)})
+        total_kwh += daily_units
+        total_money += daily_money
+        
+        results.append({"day": str(day.date()), "money": round(daily_money, 2)})
 
     return {
         "outlook": results,
-        "grid_baseline": round(grid_baseline_15d, 2),
-        "solar_total": round(total_solar_revenue, 2),
-        "net_profit": round(total_solar_revenue - grid_baseline_15d, 2)
+        "total_energy_kwh": round(total_kwh, 2),
+        "total_money_generated": round(total_money, 2)
     }
