@@ -121,50 +121,49 @@ async def predict_solar(req: PincodeRequest):
 async def get_outlook(lat: float, lon: float):
     try:
         API_KEY = os.getenv("TOMORROW_API_KEY")
-        # Step 1: Attempt to get real 15-day weather data
         url = f"https://api.tomorrow.io/v4/weather/forecast?location={lat},{lon}&apikey={API_KEY}&timesteps=1d"
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=10)
         data = response.json()
         
-        # Step 2: Validate the response structure
-        if 'timelines' in data and 'daily' in data['timelines']:
-            days_data = data['timelines']['daily']
-            location = pvlib.location.Location(lat, lon)
-            results = []
+        # Check for the correct nested path in the new API version
+        timelines = data.get('timelines', {})
+        daily_data = timelines.get('daily', [])
 
-            for day in days_data[:15]:
-                ts = pd.Timestamp(day['time'], tz='UTC')
-                # Calculate theoretical physics max
-                clearsky = location.get_clearsky(pd.DatetimeIndex([ts]))
-                max_potential = float(clearsky['ghi'].iloc[0])
-                
-                # Step 3: Weather Adjustment (Cloud Cover)
-                # Fallback to 0% clouds if the specific field is missing
-                cloud_cover = day['values'].get('cloudCoverAvg', 0) / 100.0
-                weather_adjustment = 1.0 - (cloud_cover * 0.7) 
-                
-                results.append({
-                    "day": str(ts.date()),
-                    "max_potential": round(max(50, max_potential * weather_adjustment), 2)
-                })
-            return results
-        else:
-            print("⚠️ Tomorrow.io data format unexpected. Using Fallback.")
-            raise ValueError("Incomplete API Data")
+        if not daily_data:
+            print("⚠️ No daily data found in API response. Using physics fallback.")
+            raise ValueError("Empty API response")
+
+        location = pvlib.location.Location(lat, lon)
+        results = []
+
+        for day in daily_data[:15]:
+            # Convert ISO string to timestamp
+            ts = pd.Timestamp(day.get('time'), tz='UTC')
+            
+            # Physics Baseline (Clearsky)
+            clearsky = location.get_clearsky(pd.DatetimeIndex([ts]))
+            max_potential = float(clearsky['ghi'].iloc[0])
+            
+            # Extract weather values safely
+            vals = day.get('values', {})
+            # Try multiple common cloud keys
+            cloud = vals.get('cloudCoverAvg') or vals.get('cloudCover') or 0
+            
+            # Realistic Damping: Even on cloudy days, GHI is rarely 0. 
+            # We use a 0.3 - 1.0 multiplier range.
+            weather_multiplier = 1.0 - (min(cloud, 100) / 100.0 * 0.7)
+            
+            results.append({
+                "day": str(ts.date()),
+                "max_potential": round(max_potential * weather_multiplier, 2)
+            })
+        return results
 
     except Exception as e:
-        print(f"❌ Outlook Error: {e}")
-        # --- SAFETY FALLBACK: Physics-only (Linear) ---
-        # This ensures the chart is NEVER 0 even if the API fails
+        print(f"❌ Outlook Logic Error: {e}")
+        # Final Fallback to Clearsky Physics so the chart is NEVER flat
         location = pvlib.location.Location(lat, lon)
         start_date = pd.Timestamp.now(tz='UTC').normalize()
-        fallback_results = []
-        for i in range(15):
-            day = start_date + pd.Timedelta(days=i)
-            # Find the highest point of the day for the baseline
-            clearsky = location.get_clearsky(pd.date_range(day + pd.Timedelta(hours=6), periods=12, freq='h'))
-            fallback_results.append({
-                "day": str(day.date()), 
-                "max_potential": round(float(clearsky['ghi'].max()), 2)
-            })
-        return fallback_results
+        return [{"day": str((start_date + pd.Timedelta(days=i)).date()), 
+                 "max_potential": round(float(location.get_clearsky(pd.date_range(start_date + pd.Timedelta(days=i), periods=1, freq='h'))['ghi'].max()), 2)} 
+                for i in range(15)]
