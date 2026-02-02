@@ -2,6 +2,9 @@
 SolarCast AI is an end-to-end Machine Learning solution designed for the PM Surya Ghar: Muft Bijli Yojana (2026). It solves the "Data Opacity" problem by translating raw meteorological forecasts into actionable financial insights (Units generated & Revenue saved) using a Dual-Engine Architecture.
 
 
+LIVE Link : http://16.16.131.10
+
+
 
 🏗️ 1. Exploratory Data Analysis (EDA) & Challenges
 A standard ML model fails on solar data because of its high non-linearity and sensitivity to seasonal variance.
